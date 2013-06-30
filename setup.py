@@ -19,8 +19,9 @@ setup(name='pytest-flaskit',
       py_modules=['pytest_flaskit'],
       include_package_data=True,
       install_requires=[
-          'pytest',
           'Flask>=0.10',
+          'blinker',
+          'pytest',
       ],
       tests_require=[
       ],
