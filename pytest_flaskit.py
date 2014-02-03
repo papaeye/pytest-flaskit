@@ -1,4 +1,5 @@
 import collections
+import functools
 
 import pytest
 from flask import message_flashed, template_rendered
@@ -78,3 +79,26 @@ def flashes(request, app):
     request.addfinalizer(teardown)
 
     return records
+
+
+def pytest_configure(config):
+    config.addinivalue_line('markers',
+                            'request_with_xhr: mark tests to request '
+                            'adding X-Requested-With header.')
+
+
+@pytest.fixture(autouse=True)
+def _request_with_xhr_marker(request):
+    marker = request.keywords.get('request_with_xhr')
+    if marker is not None:
+        client = request.getfuncargvalue('client')
+        client.open = request_with_xhr(client.open)
+
+
+def request_with_xhr(f):
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        kwargs.setdefault('headers', [])
+        kwargs['headers'].append(('X-Requested-With', 'XMLHttpRequest'))
+        return f(*args, **kwargs)
+    return wrapper
