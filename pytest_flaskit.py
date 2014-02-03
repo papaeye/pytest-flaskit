@@ -32,15 +32,10 @@ def _flask_db_wrapper(request):
     request.addfinalizer(teardown)
 
 
-@pytest.fixture
-def client(request, app):
-    client = app.test_client()
-    client.__enter__()
-
-    def teardown():
-        client.__exit__(None, None, None)
-    request.addfinalizer(teardown)
-    return client
+@pytest.yield_fixture
+def client(app):
+    with app.test_client() as client:
+        yield client
 
 
 @pytest.fixture
