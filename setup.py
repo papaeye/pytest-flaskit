@@ -12,7 +12,7 @@ version = next((line.split('=')[1].strip().replace("'", '')
 
 setup(name='pytest-flaskit',
       version=version,
-      description='A collection of pytest fixtures for Flask apps',
+      description='A pytest plugin to help testing Flask applications',
       author='papaeye',
       author_email='papaeye@gmail.com',
       url='http://github.com/papaeye/pytest-flaskit',
