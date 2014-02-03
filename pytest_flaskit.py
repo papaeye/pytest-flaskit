@@ -85,6 +85,9 @@ def pytest_configure(config):
     config.addinivalue_line('markers',
                             'request_with_xhr: mark tests to request '
                             'adding X-Requested-With header.')
+    config.addinivalue_line('markers',
+                            'request_with_csrf_token: mark tests to request '
+                            'adding dummy csrf token to header.')
 
 
 @pytest.fixture(autouse=True)
@@ -101,4 +104,36 @@ def request_with_xhr(f):
         kwargs.setdefault('headers', [])
         kwargs['headers'].append(('X-Requested-With', 'XMLHttpRequest'))
         return f(*args, **kwargs)
+    return wrapper
+
+
+@pytest.fixture(autouse=True)
+def _request_with_csrf_token_marker(request):
+    marker = request.keywords.get('request_with_csrf_token')
+    if marker is None:
+        return
+
+    app = request.getfuncargvalue('app')
+    # Flask-SeaSurf's defaults
+    cookie_name = app.config.get('CSRF_COOKIE_NAME', '_csrf_token')
+    header_name = app.config.get('CSRF_HEADER_NAME', 'X-CSRFToken')
+
+    csrf_token = 'dummy csrf token'
+
+    client = request.getfuncargvalue('client')
+    with client.session_transaction() as session:
+        session[cookie_name] = csrf_token
+
+    wrapper = request_with_csrf_token(header_name, csrf_token)
+    client.open = wrapper(client.open)
+
+
+def request_with_csrf_token(header_name, csrf_token):
+    def wrapper(f):
+        @functools.wraps(f)
+        def _wrapper(*args, **kwargs):
+            kwargs.setdefault('headers', [])
+            kwargs['headers'].append((header_name, csrf_token))
+            return f(*args, **kwargs)
+        return _wrapper
     return wrapper
