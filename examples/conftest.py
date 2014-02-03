@@ -4,5 +4,5 @@ from myapp import create_app
 
 
 @pytest.fixture
-def _app():
+def app():
     return create_app()

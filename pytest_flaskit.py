@@ -7,23 +7,29 @@ from flask import message_flashed, template_rendered
 __version__ = '0.1.dev1'
 
 
-@pytest.fixture
-def app(request, _app):
-    ctx = _app.app_context()
+@pytest.fixture(autouse=True)
+def _flask_app_wrapper(request):
+    if 'app' not in request.fixturenames:
+        return
+
+    app = request.getfuncargvalue('app')
+    ctx = app.app_context()
     ctx.push()
     request.addfinalizer(ctx.pop)
-    return _app
 
 
-@pytest.fixture
-def db(request, app, _db):
-    _db.create_all()
+@pytest.fixture(autouse=True)
+def _flask_db_wrapper(request):
+    if 'db' not in request.fixturenames:
+        return
+
+    db = request.getfuncargvalue('db')
+    db.create_all()
 
     def teardown():
-        _db.session.remove()
-        _db.drop_all()
+        db.session.remove()
+        db.drop_all()
     request.addfinalizer(teardown)
-    return _db
 
 
 @pytest.fixture
