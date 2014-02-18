@@ -41,6 +41,32 @@ def _flask_app_wrapper(request):
     request.addfinalizer(ctx.pop)
 
 
+try:
+    from flask.ext.sqlalchemy import _SignallingSession as SignallingSession
+    from sqlalchemy import orm
+except ImportError:
+    pass
+else:
+    class _SignallingSession(SignallingSession):
+
+        def __init__(self, db, **options):
+            self.app = db.get_app()
+            self._model_changes = {}
+            options.setdefault('bind', db.engine)
+            options.setdefault('binds', db.get_binds(self.app))
+            orm.Session.__init__(self, **options)
+
+    def _create_scoped_session(db, options=None):
+        """Helper factory method that creates a scoped session."""
+        if options is None:
+            options = {}
+        scopefunc = options.pop('scopefunc', None)
+        options.setdefault('autoflush', False)
+        return orm.scoped_session(
+            orm.sessionmaker(class_=_SignallingSession, db=db, **options),
+            scopefunc=scopefunc)
+
+
 @pytest.fixture(autouse=True)
 def _flask_db_wrapper(request):
     if 'db' not in request.fixturenames:
@@ -52,7 +78,7 @@ def _flask_db_wrapper(request):
     transaction = connection.begin()
 
     options = dict(bind=connection, binds={})
-    db.session = db.create_scoped_session(options)
+    db.session = _create_scoped_session(db, options)
 
     def teardown():
         db.session.close()
