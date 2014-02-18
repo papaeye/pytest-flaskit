@@ -61,7 +61,6 @@ else:
         if options is None:
             options = {}
         scopefunc = options.pop('scopefunc', None)
-        options.setdefault('autoflush', False)
         return orm.scoped_session(
             orm.sessionmaker(class_=_SignallingSession, db=db, **options),
             scopefunc=scopefunc)
@@ -77,7 +76,8 @@ def _flask_db_wrapper(request):
     connection = engine.connect()
     transaction = connection.begin()
 
-    options = dict(bind=connection, binds={})
+    options = dict({'bind': connection, 'binds': {}},
+                   **getattr(db, 'session_options', {}))
     db.session = _create_scoped_session(db, options)
 
     def teardown():
