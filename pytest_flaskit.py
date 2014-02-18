@@ -8,28 +8,6 @@ from flask import message_flashed, template_rendered
 __version__ = '0.1.dev1'
 
 
-@pytest.fixture(scope='session')
-def engine(request, alembic_config):
-    from alembic import command
-    from alembic.config import Config
-    from sqlalchemy import MetaData, Table, engine_from_config
-
-    engine = engine_from_config(alembic_config)
-
-    config = Config()
-    for key, value in alembic_config.items():
-        config.set_main_option(key, value)
-
-    command.upgrade(config, 'head')
-
-    def teardown():
-        command.downgrade(config, 'base')
-        Table('alembic_version', MetaData()).drop(bind=engine)
-    request.addfinalizer(teardown)
-
-    return engine
-
-
 @pytest.fixture(autouse=True)
 def _flask_app_wrapper(request):
     if 'app' not in request.fixturenames:
@@ -42,8 +20,10 @@ def _flask_app_wrapper(request):
 
 
 try:
+    from alembic import command
+    from alembic.config import Config
     from flask.ext.sqlalchemy import _SignallingSession as SignallingSession
-    from sqlalchemy import orm
+    from sqlalchemy import MetaData, Table, engine_from_config, orm
 except ImportError:
     pass
 else:
@@ -65,26 +45,42 @@ else:
             orm.sessionmaker(class_=_SignallingSession, db=db, **options),
             scopefunc=scopefunc)
 
+    @pytest.fixture(scope='session')
+    def engine(request, alembic_config):
+        engine = engine_from_config(alembic_config)
 
-@pytest.fixture(autouse=True)
-def _flask_db_wrapper(request):
-    if 'db' not in request.fixturenames:
-        return
+        config = Config()
+        for key, value in alembic_config.items():
+            config.set_main_option(key, value)
 
-    db = request.getfuncargvalue('db')
-    engine = request.getfuncargvalue('engine')
-    connection = engine.connect()
-    transaction = connection.begin()
+        command.upgrade(config, 'head')
 
-    options = dict({'bind': connection, 'binds': {}},
-                   **getattr(db, 'session_options', {}))
-    db.session = _create_scoped_session(db, options)
+        def teardown():
+            command.downgrade(config, 'base')
+            Table('alembic_version', MetaData()).drop(bind=engine)
+        request.addfinalizer(teardown)
 
-    def teardown():
-        db.session.close()
-        transaction.rollback()
-        connection.close()
-    request.addfinalizer(teardown)
+        return engine
+
+    @pytest.fixture(autouse=True)
+    def _flask_db_wrapper(request):
+        if 'db' not in request.fixturenames:
+            return
+
+        db = request.getfuncargvalue('db')
+        engine = request.getfuncargvalue('engine')
+        connection = engine.connect()
+        transaction = connection.begin()
+
+        options = dict({'bind': connection, 'binds': {}},
+                       **getattr(db, 'session_options', {}))
+        db.session = _create_scoped_session(db, options)
+
+        def teardown():
+            db.session.close()
+            transaction.rollback()
+            connection.close()
+        request.addfinalizer(teardown)
 
 
 @pytest.yield_fixture
