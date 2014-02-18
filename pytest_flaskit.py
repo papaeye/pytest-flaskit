@@ -8,6 +8,28 @@ from flask import message_flashed, template_rendered
 __version__ = '0.1.dev1'
 
 
+@pytest.fixture(scope='session')
+def engine(request, alembic_config):
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import MetaData, Table, engine_from_config
+
+    engine = engine_from_config(alembic_config)
+
+    config = Config()
+    for key, value in alembic_config.items():
+        config.set_main_option(key, value)
+
+    command.upgrade(config, 'head')
+
+    def teardown():
+        command.downgrade(config, 'base')
+        Table('alembic_version', MetaData()).drop(bind=engine)
+    request.addfinalizer(teardown)
+
+    return engine
+
+
 @pytest.fixture(autouse=True)
 def _flask_app_wrapper(request):
     if 'app' not in request.fixturenames:
@@ -25,11 +47,17 @@ def _flask_db_wrapper(request):
         return
 
     db = request.getfuncargvalue('db')
-    db.create_all()
+    engine = request.getfuncargvalue('engine')
+    connection = engine.connect()
+    transaction = connection.begin()
+
+    options = dict(bind=connection, binds={})
+    db.session = db.create_scoped_session(options)
 
     def teardown():
-        db.session.remove()
-        db.drop_all()
+        db.session.close()
+        transaction.rollback()
+        connection.close()
     request.addfinalizer(teardown)
 
 
